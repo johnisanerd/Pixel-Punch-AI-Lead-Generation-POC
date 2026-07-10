@@ -1,5 +1,8 @@
 import type { DB } from "../db/database.js";
 import { getLead } from "../leads/leads.repo.js";
+import type { FeedbackRag } from "../rag/feedback-rag.js";
+import { FileFeedbackRag } from "../rag/file-feedback-rag.js";
+import { syncFeedbackToRag } from "../rag/sync-feedback.js";
 
 export interface NewFeedback {
   projectId: number;
@@ -17,7 +20,34 @@ export interface FeedbackStats {
   approvalRate: number; // 0–1, 0 if total=0
 }
 
-export function recordFeedback(db: DB, input: NewFeedback): void {
+export interface RecordFeedbackOptions {
+  /** Inject RAG store; pass null to skip sync. Default: FileFeedbackRag unless RAG_SYNC=0. */
+  rag?: FeedbackRag | null;
+}
+
+let defaultRag: FeedbackRag | null | undefined;
+
+function resolveRag(options?: RecordFeedbackOptions): FeedbackRag | null {
+  if (options && "rag" in options) {
+    return options.rag ?? null;
+  }
+  if (process.env.RAG_SYNC === "0") return null;
+  if (defaultRag === undefined) {
+    defaultRag = new FileFeedbackRag(process.env.RAG_DIR ?? "data/rag");
+  }
+  return defaultRag;
+}
+
+/** Test helper to reset the cached default RAG instance. */
+export function resetDefaultFeedbackRag(): void {
+  defaultRag = undefined;
+}
+
+export function recordFeedback(
+  db: DB,
+  input: NewFeedback,
+  options?: RecordFeedbackOptions
+): void {
   if (!getLead(db, input.projectId, input.leadId)) {
     throw new Error(`lead ${input.leadId} not found in project ${input.projectId}`);
   }
@@ -36,6 +66,15 @@ export function recordFeedback(db: DB, input: NewFeedback): void {
   db.prepare(
     `UPDATE leads SET status = ? WHERE project_id = ? AND id = ?`
   ).run(input.good ? "approved" : "rejected", input.projectId, input.leadId);
+
+  const rag = resolveRag(options);
+  if (rag) {
+    try {
+      syncFeedbackToRag(db, rag, input.projectId, input.leadId);
+    } catch {
+      // Best-effort: SQLite feedback is source of truth; RAG is derived.
+    }
+  }
 }
 
 export function getFeedbackStats(db: DB, projectId: number): FeedbackStats {

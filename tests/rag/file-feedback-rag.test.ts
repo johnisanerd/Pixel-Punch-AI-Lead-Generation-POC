@@ -33,8 +33,8 @@ describe("FileFeedbackRag", () => {
     rmSync(baseDir, { recursive: true, force: true });
   });
 
-  it("upserts docs and retrieves similar within the same project", async () => {
-    await rag.upsert(
+  it("upserts docs and retrieves similar within the same project", () => {
+    rag.upsert(
       makeDoc({
         leadId: 1,
         company: "Acme SaaS Tools",
@@ -42,7 +42,7 @@ describe("FileFeedbackRag", () => {
         text: "Acme SaaS Tools acme-saas.com B2B software platform",
       })
     );
-    await rag.upsert(
+    rag.upsert(
       makeDoc({
         leadId: 2,
         company: "Pizza Delivery Co",
@@ -52,14 +52,14 @@ describe("FileFeedbackRag", () => {
       })
     );
 
-    const similar = await rag.similar(1, "Acme SaaS B2B software tools", 2);
+    const similar = rag.similar(1, "Acme SaaS B2B software tools", 2);
     expect(similar.length).toBeGreaterThanOrEqual(1);
     expect(similar[0]!.company).toMatch(/Acme/i);
     expect(similar[0]!.leadId).toBe(1);
   });
 
-  it("isolates projects — project 2 docs do not bleed into project 1", async () => {
-    await rag.upsert(
+  it("isolates projects — project 2 docs do not bleed into project 1", () => {
+    rag.upsert(
       makeDoc({
         projectId: 1,
         leadId: 10,
@@ -67,7 +67,7 @@ describe("FileFeedbackRag", () => {
         text: "Alpha Corp unique-alpha-token enterprise",
       })
     );
-    await rag.upsert(
+    rag.upsert(
       makeDoc({
         projectId: 2,
         leadId: 20,
@@ -76,19 +76,19 @@ describe("FileFeedbackRag", () => {
       })
     );
 
-    const fromP1 = await rag.similar(1, "unique-beta-token enterprise", 5);
+    const fromP1 = rag.similar(1, "unique-beta-token enterprise", 5);
     expect(fromP1.every((d) => d.projectId === 1)).toBe(true);
     expect(fromP1.some((d) => d.leadId === 20)).toBe(false);
 
-    const fromP2 = await rag.similar(2, "unique-alpha-token enterprise", 5);
+    const fromP2 = rag.similar(2, "unique-alpha-token enterprise", 5);
     expect(fromP2.every((d) => d.projectId === 2)).toBe(true);
     expect(fromP2.some((d) => d.leadId === 10)).toBe(false);
   });
 
-  it("overwrites an existing lead doc on upsert", async () => {
-    await rag.upsert(makeDoc({ leadId: 5, company: "Old Name", text: "Old Name first" }));
-    await rag.upsert(makeDoc({ leadId: 5, company: "New Name", text: "New Name second" }));
-    const similar = await rag.similar(1, "New Name second", 1);
+  it("overwrites an existing lead doc on upsert", () => {
+    rag.upsert(makeDoc({ leadId: 5, company: "Old Name", text: "Old Name first" }));
+    rag.upsert(makeDoc({ leadId: 5, company: "New Name", text: "New Name second" }));
+    const similar = rag.similar(1, "New Name second", 1);
     expect(similar).toHaveLength(1);
     expect(similar[0]!.company).toBe("New Name");
   });

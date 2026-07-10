@@ -101,13 +101,13 @@ function deserializeDoc(content: string): FeedbackDoc {
 export class FileFeedbackRag implements FeedbackRag {
   constructor(private readonly baseDir: string) {}
 
-  async upsert(doc: FeedbackDoc): Promise<void> {
+  upsert(doc: FeedbackDoc): void {
     const dir = projectDir(this.baseDir, doc.projectId);
     mkdirSync(dir, { recursive: true });
     writeFileSync(leadPath(this.baseDir, doc.projectId, doc.leadId), serializeDoc(doc), "utf8");
   }
 
-  async similar(projectId: number, queryText: string, k: number): Promise<FeedbackDoc[]> {
+  similar(projectId: number, queryText: string, k: number): FeedbackDoc[] {
     const dir = projectDir(this.baseDir, projectId);
     if (!existsSync(dir)) return [];
     const files = readdirSync(dir).filter((f) => f.startsWith("lead_") && f.endsWith(".md"));
@@ -116,7 +116,9 @@ export class FileFeedbackRag implements FeedbackRag {
     for (const file of files) {
       const content = readFileSync(join(dir, file), "utf8");
       const doc = deserializeDoc(content);
-      const docVec = termVector(tokenize(doc.text || `${doc.company} ${doc.website ?? ""} ${doc.notes ?? ""}`));
+      const docVec = termVector(
+        tokenize(doc.text || `${doc.company} ${doc.website ?? ""} ${doc.notes ?? ""}`)
+      );
       scored.push({ doc, score: cosine(queryVec, docVec) });
     }
     scored.sort((a, b) => b.score - a.score);
@@ -126,7 +128,7 @@ export class FileFeedbackRag implements FeedbackRag {
       .map((s) => s.doc);
   }
 
-  async clearProject(projectId: number): Promise<void> {
+  clearProject(projectId: number): void {
     const dir = projectDir(this.baseDir, projectId);
     if (existsSync(dir)) {
       rmSync(dir, { recursive: true, force: true });
