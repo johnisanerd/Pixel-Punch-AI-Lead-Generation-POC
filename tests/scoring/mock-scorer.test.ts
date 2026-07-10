@@ -58,4 +58,28 @@ describe("MockScorer", () => {
     const result = await scorer.scoreLead(makeLead({ votes: 500 }), makeProject());
     expect(result.score).toBe(100);
   });
+
+  it("boosts score by +10 when similar has a good doc", async () => {
+    const scorer = new MockScorer();
+    const lead = makeLead({ votes: 0 });
+    const project = makeProject();
+    const baseline = await scorer.scoreLead(lead, project);
+    const boosted = await scorer.scoreLead(lead, project, {
+      similar: [
+        {
+          projectId: 1,
+          leadId: 99,
+          company: "Acme Twin",
+          website: "acme-twin.com",
+          email: null,
+          score: 90,
+          good: true,
+          notes: "approved twin",
+          text: "Acme Twin approved",
+        },
+      ],
+    });
+    expect(boosted.score).toBe(Math.min(100, baseline.score + 10));
+    expect(boosted.reasons).toMatch(/similar approved lead/i);
+  });
 });

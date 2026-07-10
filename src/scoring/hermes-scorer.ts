@@ -1,5 +1,5 @@
 import type { Lead, Project } from "../domain/types.js";
-import type { ScoreResult, Scorer } from "./scorer.js";
+import type { ScoreResult, Scorer, ScoreContext } from "./scorer.js";
 
 export interface HermesScorerOptions {
   baseUrl?: string;
@@ -15,6 +15,18 @@ function stripMarkdownFences(content: string): string {
   const trimmed = content.trim();
   const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
   return fenced ? fenced[1]!.trim() : trimmed;
+}
+
+function formatSimilarSection(context?: ScoreContext): string | null {
+  const similar = context?.similar ?? [];
+  if (similar.length === 0) return null;
+  const lines = similar.map((d) => {
+    const label = d.good ? "approved" : "rejected";
+    const notes = d.notes ? ` notes=${d.notes}` : "";
+    const score = d.score !== null ? ` score=${d.score}` : "";
+    return `- ${d.company} (${d.website ?? "n/a"}) ${label}${score}${notes}`;
+  });
+  return ["Similar past leads:", ...lines].join("\n");
 }
 
 export class HermesScorer implements Scorer {
@@ -33,15 +45,22 @@ export class HermesScorer implements Scorer {
     this.model = options.model ?? "hermes";
   }
 
-  async scoreLead(lead: Lead, project: Project): Promise<ScoreResult> {
-    const userPrompt = [
+  async scoreLead(
+    lead: Lead,
+    project: Project,
+    context?: ScoreContext
+  ): Promise<ScoreResult> {
+    const parts = [
       `ICP: ${project.icp ?? "(none)"}`,
       `Company: ${lead.company}`,
       `Website: ${lead.website ?? "(none)"}`,
       `Email: ${lead.email ?? "(none)"}`,
       `Votes: ${lead.votes ?? "(none)"}`,
       `Sources: ${lead.sources.join(", ")}`,
-    ].join("\n");
+    ];
+    const similarSection = formatSimilarSection(context);
+    if (similarSection) parts.push(similarSection);
+    const userPrompt = parts.join("\n");
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",

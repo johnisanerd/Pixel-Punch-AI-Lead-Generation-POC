@@ -101,4 +101,39 @@ describe("HermesScorer", () => {
     const scorer = new HermesScorer({ fetchFn });
     await expect(scorer.scoreLead(makeLead(), makeProject())).rejects.toThrow(/0.?100|range/i);
   });
+
+  it("includes similar past leads in the user prompt", async () => {
+    const fetchFn = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: '{"score":70,"reasons":"ok"}' } }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    const scorer = new HermesScorer({ fetchFn, baseUrl: "http://test" });
+    await scorer.scoreLead(makeLead(), makeProject(), {
+      similar: [
+        {
+          projectId: 1,
+          leadId: 2,
+          company: "Past Co",
+          website: "past.com",
+          email: null,
+          score: 88,
+          good: true,
+          notes: "liked",
+          text: "Past Co",
+        },
+      ],
+    });
+    const call = fetchFn.mock.calls[0] as unknown as [string, RequestInit?];
+    const body = JSON.parse(String(call[1]?.body)) as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const user = body.messages.find((m) => m.role === "user")!.content;
+    expect(user).toContain("Similar past leads:");
+    expect(user).toContain("Past Co");
+    expect(user).toContain("approved");
+  });
 });

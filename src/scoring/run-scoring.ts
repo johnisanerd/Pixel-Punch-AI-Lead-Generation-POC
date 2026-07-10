@@ -1,6 +1,8 @@
 import type { DB } from "../db/database.js";
 import { getProject } from "../projects/projects.repo.js";
 import { listGatedLeads, saveScore } from "../leads/leads.repo.js";
+import type { FeedbackRag } from "../rag/feedback-rag.js";
+import { FileFeedbackRag } from "../rag/file-feedback-rag.js";
 import type { Scorer } from "./scorer.js";
 
 export interface ScoringSummary {
@@ -9,19 +11,39 @@ export interface ScoringSummary {
   errors: number;
 }
 
+export interface RunScoringOptions {
+  rag?: FeedbackRag | null;
+  similarK?: number;
+}
+
+function resolveRag(options?: RunScoringOptions): FeedbackRag | null {
+  if (options && "rag" in options) {
+    return options.rag ?? null;
+  }
+  if (process.env.RAG_SYNC === "0") return null;
+  return new FileFeedbackRag(process.env.RAG_DIR ?? "data/rag");
+}
+
 export async function runScoring(
   db: DB,
   projectId: number,
-  scorer: Scorer
+  scorer: Scorer,
+  options?: RunScoringOptions
 ): Promise<ScoringSummary> {
   const project = getProject(db, projectId);
   if (!project) throw new Error(`project ${projectId} not found`);
   const gated = listGatedLeads(db, projectId);
+  const rag = resolveRag(options);
+  const k = options?.similarK ?? 3;
   let scored = 0,
     errors = 0;
   for (const lead of gated) {
     try {
-      const result = await scorer.scoreLead(lead, project);
+      const query = [lead.company, lead.website ?? "", project.icp ?? ""]
+        .filter((p) => p.length > 0)
+        .join(" ");
+      const similar = rag ? rag.similar(projectId, query, k) : [];
+      const result = await scorer.scoreLead(lead, project, { similar });
       saveScore(db, projectId, lead.id, result.score, result.reasons, result.draft);
       scored++;
     } catch {
