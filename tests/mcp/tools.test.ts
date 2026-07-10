@@ -7,6 +7,7 @@ import {
   saveScoreAndDraft,
   recordFeedbackTool,
   getFeedbackStatsTool,
+  getTopPicksTool,
 } from "../../src/mcp/tools.js";
 
 describe("MCP tool handlers", () => {
@@ -102,6 +103,105 @@ describe("MCP tool handlers", () => {
         good: "yes" as unknown as boolean,
       })
     ).toThrow(/good/i);
+    db.close();
+  });
+
+  it("getTopPicksTool returns clarify messages for top scored leads", () => {
+    const db = openDatabase(":memory:");
+    const p = createProject(db, { name: "P1", website: "p1.com" });
+    insertLeads(db, p.id, [
+      {
+        company: "A",
+        website: "a.com",
+        canonicalDomain: "a.com",
+        email: "a@a.com",
+        votes: 1,
+        source: "csv",
+        sources: ["csv"],
+      },
+      {
+        company: "B",
+        website: "b.com",
+        canonicalDomain: "b.com",
+        email: "b@b.com",
+        votes: 2,
+        source: "csv",
+        sources: ["csv"],
+      },
+      {
+        company: "C",
+        website: "c.com",
+        canonicalDomain: "c.com",
+        email: "c@c.com",
+        votes: 3,
+        source: "csv",
+        sources: ["csv"],
+      },
+    ]);
+    const pending = getPendingLeads(db, { project_id: p.id });
+    saveScoreAndDraft(db, {
+      project_id: p.id,
+      lead_id: pending.leads[0].id,
+      score: 60,
+      reasons: "ok",
+    });
+    saveScoreAndDraft(db, {
+      project_id: p.id,
+      lead_id: pending.leads[1].id,
+      score: 90,
+      reasons: "great",
+    });
+    saveScoreAndDraft(db, {
+      project_id: p.id,
+      lead_id: pending.leads[2].id,
+      score: 75,
+      reasons: "good",
+    });
+
+    const result = getTopPicksTool(db, { project_id: p.id, limit: 2 });
+    expect(result.picks).toHaveLength(2);
+    expect(result.picks[0].lead.company).toBe("B");
+    expect(result.picks[0].clarify.choices).toEqual(["Good", "Bad"]);
+    expect(result.picks[0].clarify.text).toContain("B");
+    expect(result.picks[0].clarify.text).toContain("90");
+    expect(result.picks[1].lead.company).toBe("C");
+    db.close();
+  });
+
+  it("getTopPicksTool defaults limit and validates project_id", () => {
+    const db = openDatabase(":memory:");
+    expect(() =>
+      getTopPicksTool(db, { project_id: "x" as unknown as number })
+    ).toThrow(/project_id/i);
+
+    const p = createProject(db, { name: "P1" });
+    insertLeads(db, p.id, [
+      {
+        company: "Solo",
+        website: "solo.com",
+        canonicalDomain: "solo.com",
+        email: null,
+        votes: null,
+        source: "csv",
+        sources: ["csv"],
+      },
+    ]);
+    const pending = getPendingLeads(db, { project_id: p.id });
+    saveScoreAndDraft(db, {
+      project_id: p.id,
+      lead_id: pending.leads[0].id,
+      score: 80,
+      reasons: "fit",
+    });
+    const result = getTopPicksTool(db, { project_id: p.id });
+    expect(result.picks).toHaveLength(1);
+    expect(result.picks[0].clarify.leadId).toBe(pending.leads[0].id);
+    db.close();
+  });
+
+  it("getTopPicksTool errors when project is missing", () => {
+    const db = openDatabase(":memory:");
+    expect(() => getTopPicksTool(db, { project_id: 999 })).toThrow(/not found/i);
     db.close();
   });
 });

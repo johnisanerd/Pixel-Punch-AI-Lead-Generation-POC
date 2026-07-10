@@ -7,6 +7,7 @@ import {
   saveScoreAndDraft,
   recordFeedbackTool,
   getFeedbackStatsTool,
+  getTopPicksTool,
 } from "./tools.js";
 
 function textResult(data: unknown) {
@@ -104,6 +105,25 @@ async function main() {
     async (args) => {
       try {
         return textResult(getFeedbackStatsTool(db, args));
+      } catch (err) {
+        return errorResult(err);
+      }
+    }
+  );
+
+  server.registerTool(
+    "get_top_picks",
+    {
+      description:
+        "Get top scored leads awaiting feedback, with Hermes clarify message payloads (Good/Bad)",
+      inputSchema: {
+        project_id: z.number().int().positive(),
+        limit: z.number().int().positive().optional(),
+      },
+    },
+    async (args) => {
+      try {
+        return textResult(getTopPicksTool(db, args));
       } catch (err) {
         return errorResult(err);
       }

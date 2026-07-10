@@ -1,11 +1,17 @@
 import type { DB } from "../db/database.js";
 import type { Lead } from "../domain/types.js";
 import { listGatedLeads, saveScore } from "../leads/leads.repo.js";
+import { getProject } from "../projects/projects.repo.js";
 import {
   recordFeedback,
   getFeedbackStats,
   type FeedbackStats,
 } from "../feedback/feedback.repo.js";
+import {
+  selectTopPicks,
+  formatClarifyMessage,
+  type ClarifyMessage,
+} from "../telegram/top-picks.js";
 
 function requireNumber(value: unknown, name: string): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
@@ -87,4 +93,29 @@ export function getFeedbackStatsTool(
 ): FeedbackStats {
   const projectId = requireNumber(input.project_id, "project_id");
   return getFeedbackStats(db, projectId);
+}
+
+export function getTopPicksTool(
+  db: DB,
+  input: { project_id: number; limit?: number }
+): { picks: Array<{ lead: Lead; clarify: ClarifyMessage }> } {
+  const projectId = requireNumber(input.project_id, "project_id");
+  const project = getProject(db, projectId);
+  if (!project) {
+    throw new Error(`project ${projectId} not found`);
+  }
+  let limit = 5;
+  if (input.limit !== undefined) {
+    limit = requireNumber(input.limit, "limit");
+    if (!Number.isInteger(limit) || limit < 1) {
+      throw new Error("limit must be a positive integer");
+    }
+  }
+  const leads = selectTopPicks(db, projectId, limit);
+  return {
+    picks: leads.map((lead) => ({
+      lead,
+      clarify: formatClarifyMessage(lead, project),
+    })),
+  };
 }

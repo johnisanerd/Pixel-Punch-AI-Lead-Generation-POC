@@ -39,6 +39,9 @@ Logs go to **stderr** only — stdout is reserved for the MCP protocol.
 | `save_score_and_draft` | Persist score/reasons (draft reserved) |
 | `record_feedback` | Record good/bad feedback |
 | `get_feedback_stats` | Approval rate stats for a project |
+| `get_top_picks` | Top scored leads + Hermes clarify payloads |
+
+Telegram clarify → feedback flow: see [telegram-feedback.md](./telegram-feedback.md).
 
 ## Score CLI
 
