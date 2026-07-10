@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "import-csv": "tsx src/cli/import-csv.ts",
     "mcp": "tsx src/mcp/server.ts",
-    "score": "tsx src/cli/score-project.ts"
+    "score": "tsx src/cli/score-project.ts",
+    "dashboard": "tsx src/dashboard/server.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
