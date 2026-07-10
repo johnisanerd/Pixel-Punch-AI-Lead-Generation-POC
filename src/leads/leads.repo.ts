@@ -104,3 +104,41 @@ export function saveScore(
   ).run(Math.round(score), reasons, projectId, leadId);
   return getLead(db, projectId, leadId)!;
 }
+
+export interface LeadFilter {
+  status?: string;
+  minScore?: number;
+  source?: string;
+  q?: string;
+}
+
+export function listLeadsFiltered(
+  db: DB,
+  projectId: number,
+  filter: LeadFilter = {}
+): Lead[] {
+  const clauses = ["project_id = ?"];
+  const params: unknown[] = [projectId];
+
+  if (filter.status) {
+    clauses.push("status = ?");
+    params.push(filter.status);
+  }
+  if (filter.minScore !== undefined) {
+    clauses.push("score >= ?");
+    params.push(filter.minScore);
+  }
+  if (filter.q) {
+    clauses.push("company LIKE ?");
+    params.push(`%${filter.q}%`);
+  }
+  if (filter.source) {
+    // sources is a JSON array string; match containment
+    clauses.push("sources LIKE ?");
+    params.push(`%"${filter.source}"%`);
+  }
+
+  const sql = `SELECT * FROM leads WHERE ${clauses.join(" AND ")} ORDER BY score DESC NULLS LAST, id`;
+  const rows = db.prepare(sql).all(...params) as unknown as LeadRow[];
+  return rows.map(toLead);
+}

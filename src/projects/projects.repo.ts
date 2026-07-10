@@ -55,3 +55,39 @@ export function getProject(db: DB, id: number): Project | undefined {
     .get(id) as ProjectRow | undefined;
   return row ? toProject(row) : undefined;
 }
+
+export function listProjects(db: DB): Project[] {
+  const rows = db
+    .prepare("SELECT * FROM projects ORDER BY id")
+    .all() as unknown as ProjectRow[];
+  return rows.map(toProject);
+}
+
+export interface UpdateProjectInput {
+  name?: string;
+  website?: string | null;
+  description?: string | null;
+  icp?: string | null;
+}
+
+export function updateProject(
+  db: DB,
+  id: number,
+  input: UpdateProjectInput
+): Project | undefined {
+  const existing = getProject(db, id);
+  if (!existing) return undefined;
+
+  db.prepare(
+    `UPDATE projects
+     SET name = ?, website = ?, description = ?, icp = ?
+     WHERE id = ?`
+  ).run(
+    input.name !== undefined ? input.name : existing.name,
+    input.website !== undefined ? input.website : existing.website,
+    input.description !== undefined ? input.description : existing.description,
+    input.icp !== undefined ? input.icp : existing.icp,
+    id
+  );
+  return getProject(db, id);
+}
