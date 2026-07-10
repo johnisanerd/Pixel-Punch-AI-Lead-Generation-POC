@@ -69,3 +69,38 @@ export function listLeads(db: DB, projectId: number): Lead[] {
     .all(projectId) as unknown as LeadRow[];
   return rows.map(toLead);
 }
+
+export function listGatedLeads(db: DB, projectId: number): Lead[] {
+  const rows = db
+    .prepare("SELECT * FROM leads WHERE project_id = ? AND status = 'gated' ORDER BY id")
+    .all(projectId) as unknown as LeadRow[];
+  return rows.map(toLead);
+}
+
+export function getLead(db: DB, projectId: number, leadId: number): Lead | undefined {
+  const row = db
+    .prepare("SELECT * FROM leads WHERE project_id = ? AND id = ?")
+    .get(projectId, leadId) as unknown as LeadRow | undefined;
+  return row ? toLead(row) : undefined;
+}
+
+export function saveScore(
+  db: DB,
+  projectId: number,
+  leadId: number,
+  score: number,
+  reasons: string,
+  draft?: string | null
+): Lead {
+  if (score < 0 || score > 100 || !Number.isFinite(score)) {
+    throw new Error("score must be 0–100");
+  }
+  const existing = getLead(db, projectId, leadId);
+  if (!existing) throw new Error(`lead ${leadId} not found in project ${projectId}`);
+  // draft reserved — ignore for now (column not in schema yet)
+  void draft;
+  db.prepare(
+    `UPDATE leads SET score = ?, reasons = ?, status = 'scored' WHERE project_id = ? AND id = ?`
+  ).run(Math.round(score), reasons, projectId, leadId);
+  return getLead(db, projectId, leadId)!;
+}
