@@ -2,6 +2,8 @@ import type { DB } from "../db/database.js";
 import { getLead } from "../leads/leads.repo.js";
 import type { FeedbackRag } from "./feedback-rag.js";
 import type { FeedbackDoc } from "./types.js";
+import { execFileSync } from "node:child_process";
+import { join } from "node:path";
 
 interface FeedbackRow {
   good: number;
@@ -73,6 +75,17 @@ export function leadFeedbackToDoc(
   };
 }
 
+/** Best-effort: push project corpus into Hermes knowledge_base when enabled. */
+export function maybeHermesDocsSync(projectId: number): void {
+  if (process.env.HERMES_DOCS_SYNC !== "1") return;
+  const dir = join(process.env.RAG_DIR ?? "data/rag", `project_${projectId}`);
+  try {
+    execFileSync("hermes", ["docs", "add", dir], { stdio: "ignore" });
+  } catch {
+    // Hermes may be missing; RAG file corpus remains valid.
+  }
+}
+
 /** Load lead + latest feedback and upsert into the RAG store. */
 export function syncFeedbackToRag(
   db: DB,
@@ -83,6 +96,7 @@ export function syncFeedbackToRag(
   const doc = leadFeedbackToDoc(db, projectId, leadId);
   if (!doc) return;
   rag.upsert(doc);
+  maybeHermesDocsSync(projectId);
 }
 
 /**

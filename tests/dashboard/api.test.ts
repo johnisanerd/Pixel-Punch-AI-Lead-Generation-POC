@@ -1,19 +1,32 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import request from "supertest";
+import { mkdtempSync, rmSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { openDatabase, type DB } from "../../src/db/database.js";
 import { createApp } from "../../src/dashboard/app.js";
 import { MockScorer } from "../../src/scoring/mock-scorer.js";
 import { insertLeads, listLeads } from "../../src/leads/leads.repo.js";
 import { createProject } from "../../src/projects/projects.repo.js";
 import { isAllowlisted } from "../../src/users/users.repo.js";
+import { resetDefaultFeedbackRag } from "../../src/feedback/feedback.repo.js";
 
 describe("dashboard API", () => {
   let db: DB;
   let prevBypass: string | undefined;
+  let prevRagSync: string | undefined;
+  let prevRagDir: string | undefined;
+  let ragDir: string;
 
   beforeEach(() => {
     prevBypass = process.env.LEADRADAR_AUTH_BYPASS;
+    prevRagSync = process.env.RAG_SYNC;
+    prevRagDir = process.env.RAG_DIR;
     process.env.LEADRADAR_AUTH_BYPASS = "1";
+    ragDir = mkdtempSync(join(tmpdir(), "leadradar-dash-rag-"));
+    process.env.RAG_DIR = ragDir;
+    process.env.RAG_SYNC = "1";
+    resetDefaultFeedbackRag();
     db = openDatabase(":memory:");
   });
 
@@ -21,6 +34,12 @@ describe("dashboard API", () => {
     db.close();
     if (prevBypass === undefined) delete process.env.LEADRADAR_AUTH_BYPASS;
     else process.env.LEADRADAR_AUTH_BYPASS = prevBypass;
+    if (prevRagSync === undefined) delete process.env.RAG_SYNC;
+    else process.env.RAG_SYNC = prevRagSync;
+    if (prevRagDir === undefined) delete process.env.RAG_DIR;
+    else process.env.RAG_DIR = prevRagDir;
+    resetDefaultFeedbackRag();
+    rmSync(ragDir, { recursive: true, force: true });
   });
 
   function app() {
@@ -92,6 +111,9 @@ describe("dashboard API", () => {
       .send({ notes: "good fit" });
     expect(approved.status).toBe(200);
     expect(approved.body.status).toBe("approved");
+    expect(existsSync(join(ragDir, `project_${projectId}`, `lead_${leadId}.md`))).toBe(
+      true
+    );
 
     const stats = await agent.get(`/api/projects/${projectId}/stats`);
     expect(stats.status).toBe(200);

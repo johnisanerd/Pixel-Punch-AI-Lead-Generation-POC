@@ -10,6 +10,7 @@
     "import-csv": "tsx src/cli/import-csv.ts",
     "mcp": "tsx src/mcp/server.ts",
     "score": "tsx src/cli/score-project.ts",
+    "rag:rebuild": "tsx src/cli/rag-rebuild.ts",
     "dashboard": "tsx src/dashboard/server.ts"
   },
   "dependencies": {

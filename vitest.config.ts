@@ -5,6 +5,7 @@ export default defineConfig({
     include: ["tests/**/*.test.ts"],
     environment: "node",
     pool: "forks",
+    setupFiles: ["tests/setup.ts"],
   },
   ssr: {
     external: ["node:sqlite"],
