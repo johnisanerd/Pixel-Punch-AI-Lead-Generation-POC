@@ -64,24 +64,20 @@ export function createConfiguredSources(
   const sources: Source[] = [];
 
   const ph = config.producthunt;
-  if (ph?.enabled !== false && ph != null) {
-    // enabled when producthunt key present unless explicitly enabled: false
-    const enabled = ph.enabled !== false;
-    if (enabled) {
-      const token = env.PRODUCTHUNT_TOKEN;
-      if (!token?.trim()) {
-        throw new Error(
-          "sourceConfig enables producthunt but PRODUCTHUNT_TOKEN is not set"
-        );
-      }
-      sources.push(
-        new ProductHuntSource({
-          token,
-          first: ph.first,
-          fetch: options.fetch,
-        })
+  if (ph != null && ph.enabled !== false) {
+    const token = env.PRODUCTHUNT_TOKEN;
+    if (!token?.trim()) {
+      throw new Error(
+        "sourceConfig enables producthunt but PRODUCTHUNT_TOKEN is not set"
       );
     }
+    sources.push(
+      new ProductHuntSource({
+        token,
+        first: ph.first,
+        fetch: options.fetch,
+      })
+    );
   }
 
   const google = config.google;
