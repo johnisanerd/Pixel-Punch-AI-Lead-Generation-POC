@@ -1,10 +1,5 @@
 import type { CanonicalLead } from "../domain/types.js";
-import type { Source } from "./source.js";
-
-export type FetchLike = (
-  input: string | URL | Request,
-  init?: RequestInit
-) => Promise<Response>;
+import type { FetchLike, Source } from "./source.js";
 
 const GRAPHQL_URL = "https://api.producthunt.com/v2/api/graphql";
 
