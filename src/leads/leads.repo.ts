@@ -118,7 +118,7 @@ export function listLeadsFiltered(
   filter: LeadFilter = {}
 ): Lead[] {
   const clauses = ["project_id = ?"];
-  const params: unknown[] = [projectId];
+  const params: (string | number)[] = [projectId];
 
   if (filter.status) {
     clauses.push("status = ?");
