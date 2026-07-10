@@ -50,9 +50,9 @@ describe("HermesScorer", () => {
     expect(result.score).toBe(75);
     expect(result.reasons).toBe("Good ICP fit");
     expect(fetchFn).toHaveBeenCalledOnce();
-    const [url, init] = fetchFn.mock.calls[0]!;
-    expect(url).toBe("http://test/v1/chat/completions");
-    expect(init?.method).toBe("POST");
+    const call = fetchFn.mock.calls[0] as unknown as [string, RequestInit?];
+    expect(call[0]).toBe("http://test/v1/chat/completions");
+    expect(call[1]?.method).toBe("POST");
   });
 
   it("strips markdown fences from content", async () => {

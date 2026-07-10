@@ -1,0 +1,59 @@
+# Hermes MCP + Scoring wiring
+
+LeadRadar exposes a stdio MCP server Hermes (or any MCP client) can call, and a CLI to score gated leads via Hermes' OpenAI-compatible HTTP API.
+
+## Environment
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `LEADRADAR_DB` | `leadradar.db` | SQLite path for MCP server and score CLI |
+| `HERMES_API_BASE` | `http://127.0.0.1:8642` | Hermes OpenAI-compatible base URL |
+| `HERMES_API_KEY` | _(none)_ | Optional Bearer token for Hermes |
+
+## Register MCP in Hermes
+
+Add to `~/.hermes/config.yaml` (adjust the absolute path to this repo):
+
+```yaml
+mcp_servers:
+  leadradar:
+    command: "npx"
+    args: ["tsx", "D:/Pixel Punch AIOS/src/mcp/server.ts"]
+    env:
+      LEADRADAR_DB: "D:/Pixel Punch AIOS/leadradar.db"
+```
+
+Start the server manually for debugging:
+
+```bash
+npm run mcp
+```
+
+Logs go to **stderr** only — stdout is reserved for the MCP protocol.
+
+## Tools
+
+| Tool | Purpose |
+|---|---|
+| `get_pending_leads` | List gated leads for `project_id` |
+| `save_score_and_draft` | Persist score/reasons (draft reserved) |
+| `record_feedback` | Record good/bad feedback |
+| `get_feedback_stats` | Approval rate stats for a project |
+
+## Score CLI
+
+Pattern B: the backend loops gated leads and calls a Scorer.
+
+```bash
+# Mock scorer (no Hermes required)
+npm run score -- 1 --mock
+
+# Real Hermes HTTP API
+npm run score -- 1
+```
+
+Import leads first if needed:
+
+```bash
+npm run import-csv -- "Pixel Punch" sample.csv
+```
