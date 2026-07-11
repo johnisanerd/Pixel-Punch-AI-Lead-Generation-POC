@@ -593,9 +593,17 @@ $("btn-find-leads").addEventListener("click", async () => {
     const skip = summary.skippedExisting
       ? `, skipped ${summary.skippedExisting}`
       : "";
+    const dups =
+      typeof summary.duplicates === "number" && summary.duplicates > 0
+        ? `, duplicates ${summary.duplicates}`
+        : "";
+    const errs =
+      Array.isArray(summary.errors) && summary.errors.length
+        ? ` — errors: ${summary.errors.slice(0, 2).join("; ")}`
+        : "";
     toast(
-      `Fetched ${summary.fetched}, kept ${summary.kept}, rejected ${summary.rejected}${skip}`,
-      "success"
+      `Fetched ${summary.fetched}, kept ${summary.kept}, rejected ${summary.rejected}${dups}${skip}${errs}`,
+      summary.errors?.length ? "error" : "success"
     );
   } catch (err) {
     toast(err.message || String(err), "error");

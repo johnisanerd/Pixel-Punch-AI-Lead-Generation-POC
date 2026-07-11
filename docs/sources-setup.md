@@ -2,10 +2,13 @@
 
 Configure Product Hunt, Google Custom Search, and optional website enrichment per project.
 
+For **Apify-first company discovery** (recommended production lead finding), see [apify-lead-finding.md](./apify-lead-finding.md).
+
 ## Environment variables
 
 | Variable | Required for | Description |
 |---|---|---|
+| `APIFY_TOKEN` | Apify lead finding | Apify API token. See [apify-lead-finding.md](./apify-lead-finding.md). |
 | `PRODUCTHUNT_TOKEN` | Product Hunt source | Developer token or OAuth access token. Sent as `Authorization: Bearer …` to `https://api.producthunt.com/v2/api/graphql`. |
 | `GOOGLE_CSE_KEY` | Google Custom Search | Google Cloud API key with Custom Search API enabled. **Closed to new customers** — prefer Jina for new setups. |
 | `GOOGLE_CSE_ID` | Google Custom Search | Programmable Search Engine ID (`cx`). |

@@ -22,6 +22,7 @@ export interface CreateAppOptions {
   ingestFetch?: ApiOptions["ingestFetch"];
   ingestEnv?: ApiOptions["ingestEnv"];
   createConfiguredSourcesFn?: ApiOptions["createConfiguredSourcesFn"];
+  apifyClient?: ApiOptions["apifyClient"];
 }
 
 export function resolveScorer(override?: Scorer): Scorer {
@@ -48,6 +49,7 @@ export function createApp(options: CreateAppOptions): Express {
     ingestFetch,
     ingestEnv,
     createConfiguredSourcesFn,
+    apifyClient,
   } = options;
 
   const app = express();
@@ -80,6 +82,7 @@ export function createApp(options: CreateAppOptions): Express {
       ingestFetch,
       ingestEnv,
       createConfiguredSourcesFn,
+      apifyClient,
     })
   );
 

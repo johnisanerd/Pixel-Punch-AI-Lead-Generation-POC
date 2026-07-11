@@ -26,6 +26,9 @@ import {
 } from "../sources/registry.js";
 import type { MxResolver } from "../validation/email-check.js";
 import type { AuthUser } from "./auth.js";
+import type { ApifyClient } from "../discovery/apify-client.js";
+import { parseLeadFindingConfigFromProjectJson } from "../discovery/lead-finding-config.js";
+import { runLeadFinding } from "../discovery/run-lead-finding.js";
 
 export interface ApiOptions {
   db: DB;
@@ -38,6 +41,8 @@ export interface ApiOptions {
   ingestEnv?: NodeJS.ProcessEnv;
   /** Override source builder (tests). */
   createConfiguredSourcesFn?: typeof createConfiguredSources;
+  /** Injectable Apify client for lead finding (tests). */
+  apifyClient?: ApifyClient;
 }
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -97,6 +102,7 @@ export function createApiRouter(options: ApiOptions): Router {
     ingestFetch,
     ingestEnv,
     createConfiguredSourcesFn = createConfiguredSources,
+    apifyClient,
   } = options;
   const router = Router();
 
@@ -271,6 +277,29 @@ export function createApiRouter(options: ApiOptions): Router {
         res.status(404).json({ error: "project not found" });
         return;
       }
+
+      const leadFinding = parseLeadFindingConfigFromProjectJson(
+        project.sourceConfig
+      );
+      const useLeadFinding =
+        leadFinding.sources.length > 0 || Boolean(leadFinding.pack);
+
+      if (useLeadFinding) {
+        try {
+          const summary = await runLeadFinding(db, id, {
+            apifyClient,
+            env: ingestEnv,
+            concurrency: leadFinding.concurrency,
+          });
+          res.status(201).json(summary);
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : "lead finding failed";
+          res.status(400).json({ error: message });
+        }
+        return;
+      }
+
       const configureOpts: CreateConfiguredSourcesOptions = {};
       if (ingestFetch) configureOpts.fetch = ingestFetch;
       if (ingestEnv) configureOpts.env = ingestEnv;
@@ -286,7 +315,7 @@ export function createApiRouter(options: ApiOptions): Router {
       if (configured.sources.length === 0) {
         res.status(400).json({
           error:
-            "No sources configured. Enable Product Hunt and/or Jina in Project settings.",
+            "No sources configured. Add leadFinding.sources (Apify) or enable Product Hunt / Jina in Project settings.",
         });
         return;
       }

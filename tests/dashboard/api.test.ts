@@ -236,6 +236,106 @@ describe("dashboard API", () => {
     expect(ingested.body.error).toMatch(/No sources/i);
   });
 
+  it("Find leads runs Apify lead finding when leadFinding sources are configured", async () => {
+    const mockClient = {
+      runActorAndGetItems: async () => ({
+        runId: "run-dash",
+        datasetId: "ds-dash",
+        status: "SUCCEEDED",
+        items: [
+          {
+            name: "Dash Co",
+            website: "https://dash.example",
+            url: "https://src/dash",
+          },
+          {
+            name: "Noise",
+            website: "https://linkedin.com/company/noise",
+          },
+        ],
+      }),
+    };
+
+    const agent = request(
+      createApp({
+        db,
+        scorer: new MockScorer(),
+        allowlist: ["dev@local"],
+        mxResolver: async () => [{ exchange: "mx.test", priority: 10 }],
+        apifyClient: mockClient as never,
+      })
+    );
+
+    const created = await agent.post("/api/projects").send({
+      name: "Apify Project",
+      icp: "local restaurants",
+      sourceConfig: {
+        leadFinding: {
+          mode: "apify_first",
+          sources: [
+            {
+              id: "maps",
+              type: "apify",
+              actorId: "user/maps",
+              mapping: {
+                companyField: "name",
+                websiteField: "website",
+                sourceUrlField: "url",
+              },
+            },
+          ],
+        },
+      },
+    });
+    expect(created.status).toBe(201);
+
+    const ingested = await agent.post(
+      `/api/projects/${created.body.id}/ingest`
+    );
+    expect(ingested.status).toBe(201);
+    expect(ingested.body.runId).toBeGreaterThan(0);
+    expect(ingested.body.kept).toBe(1);
+    expect(ingested.body.rejected).toBeGreaterThanOrEqual(1);
+    expect(ingested.body.sourcesRun).toBe(1);
+    expect(ingested.body.errors).toEqual([]);
+
+    const leads = await agent.get(`/api/projects/${created.body.id}/leads`);
+    expect(leads.body.some((l: { company: string }) => l.company === "Dash Co")).toBe(
+      true
+    );
+  });
+
+  it("Find leads returns 400 when APIFY_TOKEN missing for leadFinding", async () => {
+    const agent = request(
+      createApp({
+        db,
+        scorer: new MockScorer(),
+        allowlist: ["dev@local"],
+        ingestEnv: {},
+      })
+    );
+    const created = await agent.post("/api/projects").send({
+      name: "No Token",
+      sourceConfig: {
+        leadFinding: {
+          sources: [
+            {
+              id: "maps",
+              type: "apify",
+              actorId: "a/b",
+              mapping: { companyField: "n", websiteField: "w" },
+            },
+          ],
+        },
+      },
+    });
+    const ingested = await agent.post(
+      `/api/projects/${created.body.id}/ingest`
+    );
+    expect(ingested.status).toBe(400);
+    expect(ingested.body.error).toMatch(/APIFY_TOKEN/);
+  });
+
   it("isAllowlisted rejects non-listed email", () => {
     expect(isAllowlisted("outsider@evil.com", ["dev@local", "team@x.com"])).toBe(
       false
