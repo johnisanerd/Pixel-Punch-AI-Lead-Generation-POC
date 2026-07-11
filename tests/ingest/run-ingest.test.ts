@@ -29,11 +29,37 @@ describe("runIngest", () => {
 
     expect(summary.kept).toBe(1);
     expect(summary.rejected).toBe(1);
+    expect(summary.skippedExisting).toBe(0);
 
     const leads = listLeads(db, project.id);
     expect(leads).toHaveLength(1);
     expect(leads[0].canonicalDomain).toBe("acme.ai");
     expect(leads[0].email).toBe("a@acme.ai");
+    db.close();
+  });
+
+  it("skips leads that already exist in the project DB", async () => {
+    const db = openDatabase(":memory:");
+    const project = createProject(db, { name: "P1" });
+    const resolver = async () => [{ exchange: "mx", priority: 10 }];
+    const csv: Source = {
+      name: "csv",
+      fetch: async () => [
+        {
+          company: "GoodCo",
+          website: "https://goodco.test",
+          email: "a@goodco.test",
+          votes: 1,
+          source: "csv",
+        },
+      ],
+    };
+    const first = await runIngest(db, project.id, [csv], resolver);
+    expect(first.kept).toBe(1);
+    const second = await runIngest(db, project.id, [csv], resolver);
+    expect(second.kept).toBe(0);
+    expect(second.skippedExisting).toBe(1);
+    expect(listLeads(db, project.id)).toHaveLength(1);
     db.close();
   });
 });

@@ -53,6 +53,27 @@ function clean(value: unknown): string | null {
   return s.length > 0 ? s : null;
 }
 
+function isProductHuntUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./i, "").toLowerCase();
+    return host === "producthunt.com" || host.endsWith(".producthunt.com");
+  } catch {
+    return /producthunt\.com/i.test(url);
+  }
+}
+
+/** Prefer a real product homepage over Product Hunt post/redirect URLs. */
+export function preferProductWebsite(
+  website: string | null | undefined,
+  url: string | null | undefined
+): string | null {
+  const w = clean(website);
+  const u = clean(url);
+  if (w && !isProductHuntUrl(w)) return w;
+  if (u && !isProductHuntUrl(u)) return u;
+  return w ?? u;
+}
+
 export function mapProductHuntPosts(nodes: PhPostNode[]): CanonicalLead[] {
   const leads: CanonicalLead[] = [];
   for (const node of nodes) {
@@ -64,7 +85,7 @@ export function mapProductHuntPosts(nodes: PhPostNode[]): CanonicalLead[] {
         : null;
     leads.push({
       company,
-      website: clean(node.website) ?? clean(node.url),
+      website: preferProductWebsite(node.website, node.url),
       email: null,
       votes,
       source: "producthunt",

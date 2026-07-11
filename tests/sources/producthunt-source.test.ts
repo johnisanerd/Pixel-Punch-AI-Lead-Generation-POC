@@ -27,6 +27,18 @@ describe("mapProductHuntPosts", () => {
     expect(leads[1].website).toBe("https://beta.dev");
     expect(leads[1].votes).toBeNull();
   });
+
+  it("prefers non-Product-Hunt website over /r/ redirect", () => {
+    const leads = mapProductHuntPosts([
+      {
+        name: "PlugThis",
+        website: "https://www.producthunt.com/r/ABC",
+        url: "https://getjuicy.app",
+        votesCount: 10,
+      },
+    ]);
+    expect(leads[0].website).toBe("https://getjuicy.app");
+  });
 });
 
 describe("ProductHuntSource", () => {

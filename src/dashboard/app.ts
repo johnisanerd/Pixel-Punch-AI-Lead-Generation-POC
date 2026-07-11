@@ -8,7 +8,7 @@ import { MockScorer } from "../scoring/mock-scorer.js";
 import { HermesScorer } from "../scoring/hermes-scorer.js";
 import { configureAuth, authBypassMiddleware, authBypassEnabled } from "./auth.js";
 import { requireAuth } from "./middleware.js";
-import { createApiRouter } from "./api.js";
+import { createApiRouter, type ApiOptions } from "./api.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(here, "..", "public");
@@ -18,6 +18,10 @@ export interface CreateAppOptions {
   scorer?: Scorer;
   allowlist?: string[];
   sessionSecret?: string;
+  mxResolver?: import("../validation/email-check.js").MxResolver;
+  ingestFetch?: ApiOptions["ingestFetch"];
+  ingestEnv?: ApiOptions["ingestEnv"];
+  createConfiguredSourcesFn?: ApiOptions["createConfiguredSourcesFn"];
 }
 
 export function resolveScorer(override?: Scorer): Scorer {
@@ -40,6 +44,10 @@ export function createApp(options: CreateAppOptions): Express {
     scorer = resolveScorer(),
     allowlist = parseAllowlist(),
     sessionSecret = process.env.SESSION_SECRET ?? "leadradar-dev-secret",
+    mxResolver,
+    ingestFetch,
+    ingestEnv,
+    createConfiguredSourcesFn,
   } = options;
 
   const app = express();
@@ -62,7 +70,18 @@ export function createApp(options: CreateAppOptions): Express {
     res.json({ ok: true, bypass: authBypassEnabled() });
   });
 
-  app.use("/api", requireAuth, createApiRouter({ db, scorer }));
+  app.use(
+    "/api",
+    requireAuth,
+    createApiRouter({
+      db,
+      scorer,
+      mxResolver,
+      ingestFetch,
+      ingestEnv,
+      createConfiguredSourcesFn,
+    })
+  );
 
   app.use(express.static(publicDir));
 

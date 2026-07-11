@@ -68,6 +68,7 @@ export interface UpdateProjectInput {
   website?: string | null;
   description?: string | null;
   icp?: string | null;
+  sourceConfig?: string | null;
 }
 
 export function updateProject(
@@ -80,13 +81,16 @@ export function updateProject(
 
   db.prepare(
     `UPDATE projects
-     SET name = ?, website = ?, description = ?, icp = ?
+     SET name = ?, website = ?, description = ?, icp = ?, source_config = ?
      WHERE id = ?`
   ).run(
     input.name !== undefined ? input.name : existing.name,
     input.website !== undefined ? input.website : existing.website,
     input.description !== undefined ? input.description : existing.description,
     input.icp !== undefined ? input.icp : existing.icp,
+    input.sourceConfig !== undefined
+      ? input.sourceConfig
+      : existing.sourceConfig,
     id
   );
   return getProject(db, id);

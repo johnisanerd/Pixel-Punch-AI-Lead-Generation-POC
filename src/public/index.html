@@ -4,46 +4,91 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>LeadRadar</title>
+  <script>
+    (function () {
+      try {
+        var stored = localStorage.getItem("leadradar-theme");
+        var theme =
+          stored === "light" || stored === "dark"
+            ? stored
+            : window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+        document.documentElement.setAttribute("data-theme", theme);
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "light");
+      }
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Sora:wght@600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <header class="top">
-    <div class="brand">LeadRadar</div>
-    <div id="user-info" class="muted"></div>
+    <div class="brand-block">
+      <div class="brand">LeadRadar</div>
+      <div id="brand-project" class="brand-sub">Select a project</div>
+    </div>
+    <div class="header-actions">
+      <button
+        id="btn-theme"
+        type="button"
+        class="theme-toggle ghost"
+        aria-label="Toggle color theme"
+        title="Toggle theme"
+      >
+        <span class="icon-moon" aria-hidden="true">☾</span>
+        <span class="icon-sun" aria-hidden="true">☀</span>
+      </button>
+      <div id="user-info" class="user-chip">—</div>
+    </div>
   </header>
-
-  <section class="toolbar">
-    <label>
-      Project
-      <select id="project-select"></select>
-    </label>
-    <form id="new-project-form" class="inline-form">
-      <input name="name" placeholder="New project name" required />
-      <input name="icp" placeholder="ICP (optional)" />
-      <button type="submit">New project</button>
-    </form>
-  </section>
 
   <section id="bypass-banner" class="banner hidden">
     Auth bypass active (<code>LEADRADAR_AUTH_BYPASS=1</code>)
   </section>
 
-  <section id="kpis" class="kpis">
-    <div class="kpi"><span class="kpi-label">Total leads</span><span id="kpi-total" class="kpi-value">—</span></div>
-    <div class="kpi"><span class="kpi-label">New this week</span><span id="kpi-new" class="kpi-value">—</span></div>
-    <div class="kpi"><span class="kpi-label">Approval rate</span><span id="kpi-approval" class="kpi-value">—</span></div>
-    <div class="kpi"><span class="kpi-label">Reply rate</span><span id="kpi-reply" class="kpi-value">—</span></div>
+  <section class="project-bar">
+    <label>
+      Project
+      <select id="project-select"></select>
+    </label>
+    <button id="btn-new-project" type="button" class="ghost">New project</button>
   </section>
 
-  <section class="actions">
+  <section id="kpis" class="kpis">
+    <div class="kpi">
+      <span class="kpi-label">Total leads</span>
+      <span id="kpi-total" class="kpi-value">—</span>
+    </div>
+    <div class="kpi">
+      <span class="kpi-label">New this week</span>
+      <span id="kpi-new" class="kpi-value">—</span>
+    </div>
+    <div id="kpi-approval-wrap" class="kpi">
+      <span class="kpi-label">Approval rate</span>
+      <span id="kpi-approval" class="kpi-value">—</span>
+    </div>
+    <div id="kpi-reply-wrap" class="kpi tint-muted">
+      <span class="kpi-label">Reply rate</span>
+      <span id="kpi-reply" class="kpi-value">—</span>
+    </div>
+  </section>
+
+  <section class="ops">
+    <button id="btn-find-leads" type="button" class="primary">Find leads</button>
     <button id="btn-score" type="button">Run scoring</button>
-    <button id="btn-export-all" type="button">Export All</button>
-    <button id="btn-export-emails" type="button">Export Emails</button>
+    <button id="btn-project-settings" type="button" class="ghost">Project settings</button>
     <label class="file-btn">
       Import CSV
-      <input id="import-file" type="file" accept=".csv,text/csv" hidden />
+      <input id="import-file" type="file" accept=".csv,text/csv" />
     </label>
-    <span id="action-status" class="muted"></span>
+    <button id="btn-export-all" type="button">Export All</button>
+    <button id="btn-export-emails" type="button">Export Emails</button>
+    <span class="ops-spacer"></span>
+    <button id="btn-shortcuts" type="button" class="shortcut-hint-btn ghost" title="Keyboard shortcuts">?</button>
   </section>
 
   <section class="filters">
@@ -66,6 +111,7 @@
       <input id="filter-q" type="search" placeholder="Company…" />
     </label>
     <button id="btn-filter" type="button">Apply</button>
+    <span id="result-count" class="result-count">0 leads</span>
   </section>
 
   <main class="main">
@@ -82,13 +128,14 @@
         </thead>
         <tbody id="leads-body"></tbody>
       </table>
+      <div id="table-empty" class="table-empty hidden">No leads match these filters.</div>
     </div>
     <aside id="detail" class="detail">
-      <h2>Lead detail</h2>
-      <p class="muted" id="detail-empty">Select a lead</p>
+      <p class="detail-eyebrow">Lead detail</p>
+      <p class="detail-empty" id="detail-empty">Select a lead to review</p>
       <div id="detail-body" class="hidden">
         <h3 id="detail-company"></h3>
-        <p id="detail-meta" class="muted"></p>
+        <div id="detail-meta" class="detail-meta"></div>
         <pre id="detail-reasons"></pre>
         <div class="detail-actions">
           <button id="btn-approve" type="button" class="ok">Approve</button>
@@ -101,6 +148,119 @@
       </div>
     </aside>
   </main>
+
+  <div id="new-project-backdrop" class="dialog-backdrop" role="presentation" inert>
+    <div class="dialog dialog-wide" role="dialog" aria-labelledby="new-project-title" aria-modal="true">
+      <h2 id="new-project-title">New project</h2>
+      <p class="dialog-desc">Create a client project, ICP, and optional live sources for Find leads.</p>
+      <form id="new-project-form">
+        <div class="dialog-fields">
+          <label>
+            Name
+            <input name="name" placeholder="e.g. Pixel Punch" required autocomplete="off" />
+          </label>
+          <label>
+            Website
+            <input name="website" placeholder="https://…" autocomplete="off" />
+          </label>
+          <label>
+            Description
+            <input name="description" placeholder="Short product description" autocomplete="off" />
+          </label>
+          <label>
+            ICP
+            <textarea name="icp" rows="4" placeholder="Ideal customer profile…"></textarea>
+          </label>
+          <fieldset class="source-fieldset">
+            <legend>Sources</legend>
+            <label class="check-row">
+              <input type="checkbox" name="ph_enabled" checked />
+              Product Hunt
+            </label>
+            <label class="check-row">
+              <input type="checkbox" name="jina_enabled" checked />
+              Jina web search
+            </label>
+            <label>
+              Jina query
+              <input name="jina_query" value="B2B SaaS AI data analytics OR decision intelligence product startup" autocomplete="off" />
+            </label>
+            <label class="check-row">
+              <input type="checkbox" name="enrich" checked />
+              Enrich websites (mailto emails)
+            </label>
+          </fieldset>
+        </div>
+        <div class="dialog-actions">
+          <button id="btn-cancel-project" type="button" class="ghost">Cancel</button>
+          <button type="submit" class="primary">Create project</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="settings-backdrop" class="dialog-backdrop" role="presentation" inert>
+    <div class="dialog dialog-wide" role="dialog" aria-labelledby="settings-title" aria-modal="true">
+      <h2 id="settings-title">Project settings</h2>
+      <p class="dialog-desc">Edit ICP and live sources, then use Find leads.</p>
+      <form id="settings-form">
+        <div class="dialog-fields">
+          <label>
+            Name
+            <input name="name" required autocomplete="off" />
+          </label>
+          <label>
+            Website
+            <input name="website" placeholder="https://…" autocomplete="off" />
+          </label>
+          <label>
+            Description
+            <input name="description" autocomplete="off" />
+          </label>
+          <label>
+            ICP
+            <textarea name="icp" rows="4" placeholder="Ideal customer profile…"></textarea>
+          </label>
+          <fieldset class="source-fieldset">
+            <legend>Sources</legend>
+            <label class="check-row">
+              <input type="checkbox" name="ph_enabled" />
+              Product Hunt
+            </label>
+            <label class="check-row">
+              <input type="checkbox" name="jina_enabled" />
+              Jina web search
+            </label>
+            <label>
+              Jina query
+              <input name="jina_query" autocomplete="off" />
+            </label>
+            <label class="check-row">
+              <input type="checkbox" name="enrich" />
+              Enrich websites (mailto emails)
+            </label>
+          </fieldset>
+        </div>
+        <div class="dialog-actions">
+          <button id="btn-cancel-settings" type="button" class="ghost">Cancel</button>
+          <button type="submit" class="primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="shortcut-panel" class="shortcut-panel hidden">
+    <h3>Shortcuts</h3>
+    <dl>
+      <dt>j / ↓</dt><dd>Next lead</dd>
+      <dt>k / ↑</dt><dd>Previous lead</dd>
+      <dt>a</dt><dd>Approve</dd>
+      <dt>r</dt><dd>Reject</dd>
+      <dt>?</dt><dd>Toggle this help</dd>
+    </dl>
+  </div>
+
+  <div id="toast-host" class="toast-host" aria-live="polite"></div>
 
   <script src="/app.js" type="module"></script>
 </body>

@@ -47,6 +47,7 @@ describe("dashboard API", () => {
       db,
       scorer: new MockScorer(),
       allowlist: ["dev@local"],
+      mxResolver: async () => [{ exchange: "mx.test", priority: 10 }],
     });
   }
 
@@ -128,6 +129,12 @@ describe("dashboard API", () => {
     expect(exported.headers["content-type"]).toMatch(/text\/csv/);
     expect(exported.text).toContain("company,email,score");
     expect(exported.text).toMatch(/@/);
+
+    const exportedAlias = await agent.get(
+      `/api/projects/${projectId}/export.csv?preset=emails`
+    );
+    expect(exportedAlias.status).toBe(200);
+    expect(exportedAlias.text).toContain("company,email,score");
   });
 
   it("keeps approve/export isolated across projects", async () => {
@@ -157,6 +164,76 @@ describe("dashboard API", () => {
     );
     expect(exportP2.status).toBe(200);
     expect(exportP2.text).not.toContain("Only P1");
+  });
+
+  it("create project with sourceConfig, PATCH, and ingest via Find leads API", async () => {
+    const mockSource = {
+      name: "mock",
+      fetch: async () => [
+        {
+          company: "Analytics Co",
+          website: "https://analytics.example",
+          email: "hi@analytics.example",
+          votes: 10,
+          source: "jina",
+        },
+      ],
+    };
+    const agent = request(
+      createApp({
+        db,
+        scorer: new MockScorer(),
+        allowlist: ["dev@local"],
+        mxResolver: async () => [{ exchange: "mx.test", priority: 10 }],
+        createConfiguredSourcesFn: () => ({
+          sources: [mockSource],
+          enrich: false,
+        }),
+      })
+    );
+
+    const created = await agent.post("/api/projects").send({
+      name: "Hunt UI",
+      website: "https://pixelpunch.example",
+      icp: "B2B analytics",
+      sourceConfig: {
+        producthunt: { enabled: true, first: 5 },
+        jina: { enabled: true, query: "analytics saas", num: 5 },
+        enrich: true,
+      },
+    });
+    expect(created.status).toBe(201);
+    expect(created.body.sourceConfig).toContain("analytics saas");
+    const projectId = created.body.id as number;
+
+    const patched = await agent.patch(`/api/projects/${projectId}`).send({
+      sourceConfig: {
+        jina: { enabled: true, query: "decision intelligence", num: 8 },
+        enrich: true,
+      },
+    });
+    expect(patched.status).toBe(200);
+    expect(patched.body.sourceConfig).toContain("decision intelligence");
+
+    const ingested = await agent.post(`/api/projects/${projectId}/ingest`);
+    expect(ingested.status).toBe(201);
+    expect(ingested.body.kept).toBe(1);
+
+    const leads = await agent.get(`/api/projects/${projectId}/leads`);
+    expect(leads.body.some((l: { company: string }) => l.company === "Analytics Co")).toBe(
+      true
+    );
+  });
+
+  it("ingest returns 400 when no sources configured", async () => {
+    const agent = request(app());
+    const created = await agent.post("/api/projects").send({ name: "Empty" });
+    expect(created.status).toBe(201);
+    const ingested = await agent.post(
+      `/api/projects/${created.body.id}/ingest`
+    );
+    expect(ingested.status).toBe(400);
+    expect(ingested.body.error).toMatch(/No sources/i);
   });
 
   it("isAllowlisted rejects non-listed email", () => {

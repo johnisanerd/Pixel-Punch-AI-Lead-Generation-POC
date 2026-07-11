@@ -9,6 +9,7 @@ export interface ScoringSummary {
   scored: number;
   skipped: number;
   errors: number;
+  errorMessages: string[];
 }
 
 export interface RunScoringOptions {
@@ -37,6 +38,7 @@ export async function runScoring(
   const k = options?.similarK ?? 3;
   let scored = 0,
     errors = 0;
+  const errorMessages: string[] = [];
   for (const lead of gated) {
     try {
       const query = [lead.company, lead.website ?? "", project.icp ?? ""]
@@ -46,9 +48,11 @@ export async function runScoring(
       const result = await scorer.scoreLead(lead, project, { similar });
       saveScore(db, projectId, lead.id, result.score, result.reasons, result.draft);
       scored++;
-    } catch {
+    } catch (err) {
       errors++;
+      const msg = err instanceof Error ? err.message : String(err);
+      errorMessages.push(`lead ${lead.id} (${lead.company}): ${msg}`);
     }
   }
-  return { scored, skipped: 0, errors };
+  return { scored, skipped: 0, errors, errorMessages };
 }

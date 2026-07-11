@@ -47,6 +47,8 @@ describe("runScoring", () => {
     const summary = await runScoring(db, p.id, flaky, { rag: null });
     expect(summary.scored).toBe(1);
     expect(summary.errors).toBe(1);
+    expect(summary.errorMessages.length).toBe(1);
+    expect(summary.errorMessages[0]).toMatch(/boom/);
     db.close();
   });
 

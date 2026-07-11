@@ -51,7 +51,10 @@ async function main() {
       (configured.enrich ? " (+ website enrich)" : "")
   );
   console.log(
-    `Fetched: ${summary.fetched}, Kept: ${summary.kept}, Rejected: ${summary.rejected}`
+    `Fetched: ${summary.fetched}, Kept: ${summary.kept}, Rejected: ${summary.rejected}` +
+      (summary.skippedExisting
+        ? `, Skipped existing: ${summary.skippedExisting}`
+        : "")
   );
   db.close();
 }

@@ -9,12 +9,35 @@ export interface HermesScorerOptions {
 }
 
 const SYSTEM_PROMPT =
-  'You score B2B leads. Reply ONLY with JSON: {"score":0-100,"reasons":"..."}';
+  'You score B2B leads from the fields provided only. Do not call tools, search, or look up anything. Reply with ONLY a single JSON object and nothing else: {"score":0-100,"reasons":"short ICP fit explanation"}. No markdown, no preamble.';
+
+function looksLikeToolNoise(reasons: string): boolean {
+  return /lead_id|top picks|pending leads|record_feedback|get_top_picks|save_score|mcp|tool call/i.test(
+    reasons
+  );
+}
 
 function stripMarkdownFences(content: string): string {
   const trimmed = content.trim();
   const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
   return fenced ? fenced[1]!.trim() : trimmed;
+}
+
+/** Pull the first JSON object from agent prose if needed. */
+export function extractJsonObject(content: string): string {
+  const stripped = stripMarkdownFences(content);
+  try {
+    JSON.parse(stripped);
+    return stripped;
+  } catch {
+    /* fall through */
+  }
+  const start = stripped.indexOf("{");
+  const end = stripped.lastIndexOf("}");
+  if (start >= 0 && end > start) {
+    return stripped.slice(start, end + 1);
+  }
+  return stripped;
 }
 
 function formatSimilarSection(context?: ScoreContext): string | null {
@@ -42,7 +65,7 @@ export class HermesScorer implements Scorer {
     );
     this.apiKey = options.apiKey ?? process.env.HERMES_API_KEY ?? null;
     this.fetchFn = options.fetchFn ?? fetch;
-    this.model = options.model ?? "hermes";
+    this.model = options.model ?? process.env.HERMES_MODEL ?? "hermes-agent";
   }
 
   async scoreLead(
@@ -96,9 +119,11 @@ export class HermesScorer implements Scorer {
 
     let parsed: unknown;
     try {
-      parsed = JSON.parse(stripMarkdownFences(content));
+      parsed = JSON.parse(extractJsonObject(content));
     } catch {
-      throw new Error("Hermes response is not valid JSON");
+      throw new Error(
+        `Hermes response is not valid JSON: ${content.slice(0, 200)}`
+      );
     }
 
     if (
@@ -114,6 +139,11 @@ export class HermesScorer implements Scorer {
     const reasons = String((parsed as { reasons: unknown }).reasons);
     if (!Number.isFinite(score) || score < 0 || score > 100) {
       throw new Error("Hermes score out of range (must be 0–100)");
+    }
+    if (looksLikeToolNoise(reasons)) {
+      throw new Error(
+        `Hermes returned tool/MCP noise instead of a score reason: ${reasons.slice(0, 200)}`
+      );
     }
 
     return { score: Math.round(score), reasons };

@@ -3,13 +3,16 @@ import type { Source, FetchLike } from "../sources/source.js";
 import type { CanonicalLead } from "../domain/types.js";
 import type { MxResolver } from "../validation/email-check.js";
 import { validateAggregate } from "../validation/validate.js";
-import { insertLeads } from "../leads/leads.repo.js";
+import { leadIdentityKey, type DedupedLead } from "../validation/dedup.js";
+import { insertLeads, listLeads } from "../leads/leads.repo.js";
 import { enrichLeadsFromWebsites } from "../sources/website-enricher.js";
 
 export interface IngestSummary {
   fetched: number;
   kept: number;
   rejected: number;
+  /** Leads skipped because they already exist in the project DB. */
+  skippedExisting: number;
 }
 
 export interface RunIngestOptions {
@@ -30,6 +33,35 @@ function resolveOptions(
   return resolverOrOptions;
 }
 
+function filterNewLeads(
+  db: DB,
+  projectId: number,
+  kept: DedupedLead[]
+): { novel: DedupedLead[]; skippedExisting: number } {
+  const existing = listLeads(db, projectId);
+  const keys = new Set(
+    existing.map((l) =>
+      leadIdentityKey({
+        company: l.company,
+        website: l.website,
+        canonicalDomain: l.canonicalDomain,
+      })
+    )
+  );
+  const novel: DedupedLead[] = [];
+  let skippedExisting = 0;
+  for (const lead of kept) {
+    const key = leadIdentityKey(lead);
+    if (keys.has(key)) {
+      skippedExisting++;
+      continue;
+    }
+    keys.add(key);
+    novel.push(lead);
+  }
+  return { novel, skippedExisting };
+}
+
 export async function runIngest(
   db: DB,
   projectId: number,
@@ -38,20 +70,21 @@ export async function runIngest(
 ): Promise<IngestSummary> {
   const options = resolveOptions(resolverOrOptions);
 
-  // 1. INGEST: fetch each source, map already done inside adapters
   const pools = await Promise.all(sources.map((s) => s.fetch()));
   let merged: CanonicalLead[] = pools.flat();
 
-  // 1b. Optional website enrichment (emails from mailto:)
   if (options.enrichWebsites) {
     merged = await enrichLeadsFromWebsites(merged, { fetch: options.fetch });
   }
 
-  // 2. VALIDATE ONCE on the aggregate
   const { kept, rejected } = await validateAggregate(merged, options.resolver);
+  const { novel, skippedExisting } = filterNewLeads(db, projectId, kept);
+  insertLeads(db, projectId, novel);
 
-  // 3. PERSIST gated leads
-  insertLeads(db, projectId, kept);
-
-  return { fetched: merged.length, kept: kept.length, rejected: rejected.length };
+  return {
+    fetched: merged.length,
+    kept: novel.length,
+    rejected: rejected.length,
+    skippedExisting,
+  };
 }

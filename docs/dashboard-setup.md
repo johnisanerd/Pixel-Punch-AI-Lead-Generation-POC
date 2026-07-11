@@ -2,14 +2,32 @@
 
 ## Quick start (local / tests)
 
+**Recommended (auth bypass + real Hermes scoring):**
+
 ```bash
-# From repo root
-$env:LEADRADAR_AUTH_BYPASS="1"   # PowerShell
+# Loads .env (HERMES_*, PRODUCTHUNT_*, JINA_*), clears SCORE_MOCK, sets auth bypass
+npm run dashboard:dev
+```
+
+Open http://localhost:3000 — signed in as `dev@local`. Scoring uses Hermes at `HERMES_API_BASE` (default `http://127.0.0.1:8642`). Keep `hermes gateway run` up.
+
+### Dashboard lead hunt (no CLI)
+
+1. **New project** — name, website, ICP, enable Product Hunt / Jina, set Jina query, enrich on.
+2. **Find leads** — runs configured sources + optional website enrich.
+3. **Run scoring** — Hermes (or Mock if `SCORE_MOCK=1`).
+4. Review / Approve / Reject / Export as before.
+5. **Project settings** — edit ICP and sources anytime.
+
+Auth stays on **`LEADRADAR_AUTH_BYPASS=1`** until you explicitly enable Google OAuth for production.
+
+**Mock scoring only (unit/UI without Hermes):**
+
+```bash
+$env:LEADRADAR_AUTH_BYPASS="1"
 $env:SCORE_MOCK="1"
 npm run dashboard
 ```
-
-Open http://localhost:3000 — you are signed in as `dev@local` with no Google OAuth.
 
 Bash:
 

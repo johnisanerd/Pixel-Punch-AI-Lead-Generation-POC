@@ -13,7 +13,8 @@
     "score": "tsx src/cli/score-project.ts",
     "top-picks": "tsx src/cli/top-picks.ts",
     "rag:rebuild": "tsx src/cli/rag-rebuild.ts",
-    "dashboard": "tsx src/dashboard/server.ts"
+    "dashboard": "tsx src/dashboard/server.ts",
+    "dashboard:dev": "tsx scripts/run-dashboard-dev.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

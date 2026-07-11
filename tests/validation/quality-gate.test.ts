@@ -19,6 +19,19 @@ describe("qualityGate", () => {
     expect(kept).toHaveLength(1);
     expect(rejected).toHaveLength(0);
   });
+  it("keeps Product Hunt redirect website even when canonicalDomain is null", () => {
+    const { kept, rejected } = qualityGate([
+      d({
+        company: "PlugThis",
+        website: "https://www.producthunt.com/r/ABC",
+        canonicalDomain: null,
+        source: "producthunt",
+        sources: ["producthunt"],
+      }),
+    ]);
+    expect(kept).toHaveLength(1);
+    expect(rejected).toHaveLength(0);
+  });
   it("keeps a lead that has an email", () => {
     const { kept } = qualityGate([d({ email: "a@b.com" })]);
     expect(kept).toHaveLength(1);

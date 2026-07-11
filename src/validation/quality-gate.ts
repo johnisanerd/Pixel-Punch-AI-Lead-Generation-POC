@@ -18,7 +18,9 @@ export function qualityGate(leads: DedupedLead[]): QualityGateResult {
       rejected.push({ lead, reason: "no-company" });
       continue;
     }
-    const hasWebsite = !!lead.canonicalDomain;
+    // Website URL counts even when canonicalDomain is null (e.g. Product Hunt
+    // redirect hosts are excluded from identity keys but remain contactable).
+    const hasWebsite = !!(lead.website && lead.website.trim()) || !!lead.canonicalDomain;
     const hasEmail = !!lead.email;
     if (!hasWebsite && !hasEmail) {
       rejected.push({ lead, reason: "no-contactable-signal" });

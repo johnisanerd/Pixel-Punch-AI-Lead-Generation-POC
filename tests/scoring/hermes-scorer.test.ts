@@ -76,6 +76,26 @@ describe("HermesScorer", () => {
     expect(result.reasons).toBe("ok");
   });
 
+  it("extracts JSON object embedded in prose", async () => {
+    const fetchFn = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: 'Sure.\n{"score":55,"reasons":"ok"}\nDone.',
+              },
+            },
+          ],
+        }),
+        { status: 200 }
+      )
+    );
+    const scorer = new HermesScorer({ fetchFn });
+    const result = await scorer.scoreLead(makeLead(), makeProject());
+    expect(result.score).toBe(55);
+  });
+
   it("throws on bad JSON", async () => {
     const fetchFn = vi.fn(async () =>
       new Response(
@@ -99,7 +119,31 @@ describe("HermesScorer", () => {
       )
     );
     const scorer = new HermesScorer({ fetchFn });
-    await expect(scorer.scoreLead(makeLead(), makeProject())).rejects.toThrow(/0.?100|range/i);
+    await expect(scorer.scoreLead(makeLead(), makeProject())).rejects.toThrow(
+      /0.?100|range/i
+    );
+  });
+
+  it("rejects tool/MCP noise disguised as reasons", async () => {
+    const fetchFn = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content:
+                  '{"score":0,"reasons":"No pending leads; get_top_picks returned empty"}',
+              },
+            },
+          ],
+        }),
+        { status: 200 }
+      )
+    );
+    const scorer = new HermesScorer({ fetchFn });
+    await expect(scorer.scoreLead(makeLead(), makeProject())).rejects.toThrow(
+      /tool\/MCP noise/i
+    );
   });
 
   it("includes similar past leads in the user prompt", async () => {

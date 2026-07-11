@@ -38,6 +38,11 @@ async function main() {
 
   const summary = await runScoring(db, projectId, scorer);
   console.log(`Scored: ${summary.scored}, Skipped: ${summary.skipped}, Errors: ${summary.errors}`);
+  if (summary.errorMessages.length) {
+    for (const msg of summary.errorMessages) {
+      console.error(`  - ${msg}`);
+    }
+  }
   db.close();
 
   if (summary.errors > 0 && summary.scored === 0) {

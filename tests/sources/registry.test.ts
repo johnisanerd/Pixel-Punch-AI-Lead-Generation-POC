@@ -46,12 +46,13 @@ describe("parseSourceConfig", () => {
 });
 
 describe("createConfiguredSources", () => {
-  it("builds Product Hunt + Google sources from config + env", () => {
+  it("builds Product Hunt + Google + Jina sources from config + env", () => {
     const { sources, enrich } = createConfiguredSources(
       project(
         JSON.stringify({
           producthunt: { enabled: true, first: 3 },
           google: { query: "SaaS startups", num: 5 },
+          jina: { query: "B2B AI", num: 5 },
           enrich: true,
         })
       ),
@@ -60,10 +61,15 @@ describe("createConfiguredSources", () => {
           PRODUCTHUNT_TOKEN: "ph-token",
           GOOGLE_CSE_KEY: "g-key",
           GOOGLE_CSE_ID: "g-cx",
+          JINA_API_KEY: "jina-key",
         },
       }
     );
-    expect(sources.map((s) => s.name).sort()).toEqual(["google", "producthunt"]);
+    expect(sources.map((s) => s.name).sort()).toEqual([
+      "google",
+      "jina",
+      "producthunt",
+    ]);
     expect(enrich).toBe(true);
   });
 
@@ -81,6 +87,13 @@ describe("createConfiguredSources", () => {
         { env: { GOOGLE_CSE_KEY: "k" } }
       )
     ).toThrow(/GOOGLE_CSE_ID/);
+
+    expect(() =>
+      createConfiguredSources(
+        project(JSON.stringify({ jina: { query: "x" } })),
+        { env: {} }
+      )
+    ).toThrow(/JINA_API_KEY/);
   });
 
   it("skips sources with enabled: false", () => {
@@ -89,6 +102,7 @@ describe("createConfiguredSources", () => {
         JSON.stringify({
           producthunt: { enabled: false },
           google: { enabled: false, query: "x" },
+          jina: { enabled: false, query: "x" },
         })
       ),
       {
@@ -96,6 +110,7 @@ describe("createConfiguredSources", () => {
           PRODUCTHUNT_TOKEN: "t",
           GOOGLE_CSE_KEY: "k",
           GOOGLE_CSE_ID: "cx",
+          JINA_API_KEY: "j",
         },
       }
     );

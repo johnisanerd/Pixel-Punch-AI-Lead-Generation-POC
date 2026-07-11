@@ -2,6 +2,7 @@ import type { Project } from "../domain/types.js";
 import type { FetchLike, Source } from "./source.js";
 import { ProductHuntSource } from "./producthunt-source.js";
 import { GoogleSearchSource } from "./google-search-source.js";
+import { JinaSearchSource } from "./jina-search-source.js";
 
 export interface ProductHuntConfig {
   enabled?: boolean;
@@ -15,10 +16,18 @@ export interface GoogleSearchConfig {
   num?: number;
 }
 
+export interface JinaSearchConfig {
+  enabled?: boolean;
+  /** Required when enabled. */
+  query?: string;
+  num?: number;
+}
+
 /** JSON shape stored in `projects.source_config`. */
 export interface SourceConfig {
   producthunt?: ProductHuntConfig;
   google?: GoogleSearchConfig;
+  jina?: JinaSearchConfig;
   /** When true, website enricher runs after merge (before validate). */
   enrich?: boolean;
 }
@@ -106,6 +115,28 @@ export function createConfiguredSources(
         cx,
         query,
         num: google.num,
+        fetch: options.fetch,
+      })
+    );
+  }
+
+  const jina = config.jina;
+  if (jina != null && jina.enabled !== false) {
+    const query = jina.query?.trim();
+    if (!query) {
+      throw new Error(
+        "sourceConfig.jina requires a non-empty query when enabled"
+      );
+    }
+    const apiKey = env.JINA_API_KEY;
+    if (!apiKey?.trim()) {
+      throw new Error("sourceConfig enables jina but JINA_API_KEY is not set");
+    }
+    sources.push(
+      new JinaSearchSource({
+        apiKey,
+        query,
+        num: jina.num,
         fetch: options.fetch,
       })
     );

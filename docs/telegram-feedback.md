@@ -12,6 +12,33 @@ LeadRadar does **not** talk to the Telegram Bot API. Hermes owns the Telegram ga
 - LeadRadar MCP registered (see [hermes-mcp.md](./hermes-mcp.md))
 - Project has leads with `status=scored` (run `npm run score -- <projectId>` first)
 
+## This machine (Pixel Punch)
+
+| Item | Value |
+|---|---|
+| Bot | `@lead_agent_hermes_bot` |
+| Hermes env | `TELEGRAM_BOT_TOKEN` + `TELEGRAM_ALLOWED_USERS` in `D:\PixelPunch\hermes\.env` |
+| Allowlisted user | `5691449303` (Sawan) |
+| Start gateway | `hermes gateway run` (keep running) |
+
+**Quick test:** open Telegram → message the bot → you should get a Hermes reply (not “unauthorized”).
+
+**Review top picks (required phrase):**
+
+```text
+Review LeadRadar top picks for project 1
+```
+
+or:
+
+```text
+Use leadradar-review for project 1
+```
+
+Hermes must call MCP `get_top_picks`, show **company + score** in text, then `clarify` with choices **Good** / **Bad**. After you tap, it calls `record_feedback` with `source: "telegram"`.
+
+If you only see “Is this a good lead?” with no company name, stop — that is a bug (skill/MCP not applied). Restart gateway after skill changes: `hermes gateway stop` then `hermes gateway run`.
+
 ## CLI (manual / paste into Hermes)
 
 ```bash

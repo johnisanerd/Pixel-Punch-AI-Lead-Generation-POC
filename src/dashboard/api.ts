@@ -5,6 +5,7 @@ import {
   createProject,
   getProject,
   listProjects,
+  updateProject,
 } from "../projects/projects.repo.js";
 import {
   getLead,
@@ -17,12 +18,26 @@ import { parseCsvSource, type ColumnMapping } from "../sources/csv-source.js";
 import { runIngest } from "../ingest/run-ingest.js";
 import { runScoring } from "../scoring/run-scoring.js";
 import type { Scorer } from "../scoring/scorer.js";
-import type { Source } from "../sources/source.js";
+import type { Source, FetchLike } from "../sources/source.js";
+import {
+  createConfiguredSources,
+  parseSourceConfig,
+  type CreateConfiguredSourcesOptions,
+} from "../sources/registry.js";
+import type { MxResolver } from "../validation/email-check.js";
 import type { AuthUser } from "./auth.js";
 
 export interface ApiOptions {
   db: DB;
   scorer: Scorer;
+  /** Optional MX resolver (tests inject a stub to avoid live DNS). */
+  mxResolver?: MxResolver;
+  /** Injectable fetch for live-source ingest (tests). */
+  ingestFetch?: FetchLike;
+  /** Env override for source credentials (tests). */
+  ingestEnv?: NodeJS.ProcessEnv;
+  /** Override source builder (tests). */
+  createConfiguredSourcesFn?: typeof createConfiguredSources;
 }
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -57,8 +72,32 @@ function currentUser(req: Request): AuthUser {
   return req.user as AuthUser;
 }
 
+/** Accept object or JSON string; return DB string or null. */
+export function serializeSourceConfig(value: unknown): string | null {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    parseSourceConfig(trimmed);
+    return trimmed;
+  }
+  if (typeof value === "object" && !Array.isArray(value)) {
+    const json = JSON.stringify(value);
+    parseSourceConfig(json);
+    return json;
+  }
+  throw new Error("sourceConfig must be an object or JSON string");
+}
+
 export function createApiRouter(options: ApiOptions): Router {
-  const { db, scorer } = options;
+  const {
+    db,
+    scorer,
+    mxResolver,
+    ingestFetch,
+    ingestEnv,
+    createConfiguredSourcesFn = createConfiguredSources,
+  } = options;
   const router = Router();
 
   router.get("/me", (req, res) => {
@@ -71,18 +110,55 @@ export function createApiRouter(options: ApiOptions): Router {
   });
 
   router.post("/projects", (req, res) => {
-    const { name, website, description, icp } = req.body ?? {};
-    if (!name || typeof name !== "string") {
-      res.status(400).json({ error: "name is required" });
-      return;
+    try {
+      const { name, website, description, icp, sourceConfig } = req.body ?? {};
+      if (!name || typeof name !== "string") {
+        res.status(400).json({ error: "name is required" });
+        return;
+      }
+      const project = createProject(db, {
+        name,
+        website: website ?? null,
+        description: description ?? null,
+        icp: icp ?? null,
+        sourceConfig: serializeSourceConfig(sourceConfig),
+      });
+      res.status(201).json(project);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "invalid request";
+      res.status(400).json({ error: message });
     }
-    const project = createProject(db, {
-      name,
-      website: website ?? null,
-      description: description ?? null,
-      icp: icp ?? null,
-    });
-    res.status(201).json(project);
+  });
+
+  router.patch("/projects/:id", (req, res) => {
+    try {
+      const id = projectIdParam(req);
+      if (!getProject(db, id)) {
+        res.status(404).json({ error: "project not found" });
+        return;
+      }
+      const body = req.body ?? {};
+      const input: Parameters<typeof updateProject>[2] = {};
+      if (body.name !== undefined) {
+        if (typeof body.name !== "string" || !body.name.trim()) {
+          res.status(400).json({ error: "name must be a non-empty string" });
+          return;
+        }
+        input.name = body.name.trim();
+      }
+      if (body.website !== undefined) input.website = body.website ?? null;
+      if (body.description !== undefined)
+        input.description = body.description ?? null;
+      if (body.icp !== undefined) input.icp = body.icp ?? null;
+      if (body.sourceConfig !== undefined) {
+        input.sourceConfig = serializeSourceConfig(body.sourceConfig);
+      }
+      const project = updateProject(db, id, input);
+      res.json(project);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "invalid request";
+      res.status(400).json({ error: message });
+    }
   });
 
   router.get("/projects/:id", (req, res) => {
@@ -187,6 +263,45 @@ export function createApiRouter(options: ApiOptions): Router {
     }
   });
 
+  router.post("/projects/:id/ingest", async (req, res, next) => {
+    try {
+      const id = projectIdParam(req);
+      const project = getProject(db, id);
+      if (!project) {
+        res.status(404).json({ error: "project not found" });
+        return;
+      }
+      const configureOpts: CreateConfiguredSourcesOptions = {};
+      if (ingestFetch) configureOpts.fetch = ingestFetch;
+      if (ingestEnv) configureOpts.env = ingestEnv;
+
+      let configured;
+      try {
+        configured = createConfiguredSourcesFn(project, configureOpts);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "invalid sources";
+        res.status(400).json({ error: message });
+        return;
+      }
+      if (configured.sources.length === 0) {
+        res.status(400).json({
+          error:
+            "No sources configured. Enable Product Hunt and/or Jina in Project settings.",
+        });
+        return;
+      }
+
+      const summary = await runIngest(db, id, configured.sources, {
+        resolver: mxResolver,
+        enrichWebsites: configured.enrich,
+        fetch: ingestFetch,
+      });
+      res.status(201).json(summary);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get("/projects/:id/export.csv", (req, res) => {
     const id = projectIdParam(req);
     if (!getProject(db, id)) {
@@ -195,9 +310,11 @@ export function createApiRouter(options: ApiOptions): Router {
     }
     const presetRaw =
       typeof req.query.preset === "string" ? req.query.preset : "all";
+    const normalized =
+      presetRaw === "emails" ? "emails_only" : presetRaw;
     const preset: ExportPreset =
-      presetRaw === "emails_only" || presetRaw === "current"
-        ? presetRaw
+      normalized === "emails_only" || normalized === "current"
+        ? normalized
         : "all";
     const leads = listLeadsFiltered(db, id, parseFilter(req.query));
     const csv = exportLeadsCsv(leads, preset);
@@ -250,7 +367,9 @@ export function createApiRouter(options: ApiOptions): Router {
           name: "csv",
           fetch: async () => parseCsvSource(csvText!, mapping),
         };
-        const summary = await runIngest(db, id, [csvSource]);
+        const summary = await runIngest(db, id, [csvSource], {
+          resolver: mxResolver,
+        });
         res.status(201).json(summary);
       } catch (err) {
         next(err);
