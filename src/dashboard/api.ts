@@ -29,6 +29,7 @@ import type { AuthUser } from "./auth.js";
 import type { ApifyClient } from "../discovery/apify-client.js";
 import { parseLeadFindingConfigFromProjectJson } from "../discovery/lead-finding-config.js";
 import { runLeadFinding } from "../discovery/run-lead-finding.js";
+import { runCompanyEnrichment } from "../enrichment/run-company-enrichment.js";
 
 export interface ApiOptions {
   db: DB;
@@ -37,6 +38,8 @@ export interface ApiOptions {
   mxResolver?: MxResolver;
   /** Injectable fetch for live-source ingest (tests). */
   ingestFetch?: FetchLike;
+  /** Injectable fetch for company enrichment crawler (tests). */
+  enrichFetch?: FetchLike;
   /** Env override for source credentials (tests). */
   ingestEnv?: NodeJS.ProcessEnv;
   /** Override source builder (tests). */
@@ -100,6 +103,7 @@ export function createApiRouter(options: ApiOptions): Router {
     scorer,
     mxResolver,
     ingestFetch,
+    enrichFetch,
     ingestEnv,
     createConfiguredSourcesFn = createConfiguredSources,
     apifyClient,
@@ -326,6 +330,30 @@ export function createApiRouter(options: ApiOptions): Router {
         fetch: ingestFetch,
       });
       res.status(201).json(summary);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post("/projects/:id/enrich-companies", async (req, res, next) => {
+    try {
+      const id = projectIdParam(req);
+      if (!getProject(db, id)) {
+        res.status(404).json({ error: "project not found" });
+        return;
+      }
+      const force = req.body?.force === true;
+      try {
+        const summary = await runCompanyEnrichment(db, id, {
+          fetch: enrichFetch,
+          force,
+        });
+        res.status(201).json(summary);
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "company enrichment failed";
+        res.status(400).json({ error: message });
+      }
     } catch (err) {
       next(err);
     }

@@ -105,6 +105,24 @@ export function saveScore(
   return getLead(db, projectId, leadId)!;
 }
 
+/** Set email only when the lead currently has none. Returns updated lead or undefined if unchanged/missing. */
+export function setLeadEmailIfEmpty(
+  db: DB,
+  projectId: number,
+  leadId: number,
+  email: string
+): Lead | undefined {
+  const existing = getLead(db, projectId, leadId);
+  if (!existing) return undefined;
+  if (existing.email?.trim()) return existing;
+  const cleaned = email.trim();
+  if (!cleaned) return existing;
+  db.prepare(
+    `UPDATE leads SET email = ? WHERE project_id = ? AND id = ? AND (email IS NULL OR email = '')`
+  ).run(cleaned, projectId, leadId);
+  return getLead(db, projectId, leadId);
+}
+
 export interface LeadFilter {
   status?: string;
   minScore?: number;

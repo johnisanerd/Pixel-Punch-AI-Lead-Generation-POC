@@ -79,6 +79,7 @@
 
   <section class="ops">
     <button id="btn-find-leads" type="button" class="primary">Find leads</button>
+    <button id="btn-enrich-companies" type="button">Enrich companies</button>
     <button id="btn-score" type="button">Run scoring</button>
     <button id="btn-project-settings" type="button" class="ghost">Project settings</button>
     <label class="file-btn">
@@ -189,6 +190,15 @@
               <input type="checkbox" name="enrich" checked />
               Enrich websites (mailto emails)
             </label>
+            <label>
+              Advanced source config (JSON)
+              <textarea
+                name="source_config_json"
+                rows="8"
+                spellcheck="false"
+                placeholder='Optional. Example: { "leadFinding": { ... }, "companyEnrichment": { "enabled": true } }'
+              ></textarea>
+            </label>
           </fieldset>
         </div>
         <div class="dialog-actions">
@@ -202,7 +212,7 @@
   <div id="settings-backdrop" class="dialog-backdrop" role="presentation" inert>
     <div class="dialog dialog-wide" role="dialog" aria-labelledby="settings-title" aria-modal="true">
       <h2 id="settings-title">Project settings</h2>
-      <p class="dialog-desc">Edit ICP and live sources, then use Find leads.</p>
+      <p class="dialog-desc">Edit ICP and live sources, then use Find leads / Enrich companies.</p>
       <form id="settings-form">
         <div class="dialog-fields">
           <label>
@@ -238,6 +248,15 @@
             <label class="check-row">
               <input type="checkbox" name="enrich" />
               Enrich websites (mailto emails)
+            </label>
+            <label>
+              Advanced source config (JSON)
+              <textarea
+                name="source_config_json"
+                rows="10"
+                spellcheck="false"
+                placeholder='Paste leadFinding / companyEnrichment JSON here. See docs/apify-lead-finding.md'
+              ></textarea>
             </label>
           </fieldset>
         </div>

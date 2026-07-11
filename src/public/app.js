@@ -141,16 +141,39 @@ function sourceConfigFromForm(form) {
   const jinaEnabled = fd.get("jina_enabled") === "on";
   const enrich = fd.get("enrich") === "on";
   const jinaQuery = String(fd.get("jina_query") || "").trim();
-  const cfg = {};
+  const advancedRaw = String(fd.get("source_config_json") || "").trim();
+
+  let cfg = {};
+  if (advancedRaw) {
+    try {
+      const parsed = JSON.parse(advancedRaw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("Advanced source config must be a JSON object");
+      }
+      cfg = { ...parsed };
+    } catch (err) {
+      throw new Error(
+        err instanceof Error
+          ? `Invalid advanced source config JSON: ${err.message}`
+          : "Invalid advanced source config JSON"
+      );
+    }
+  }
+
   if (phEnabled) cfg.producthunt = { enabled: true, first: 20 };
+  else delete cfg.producthunt;
+
   if (jinaEnabled) {
     cfg.jina = {
       enabled: true,
       query: jinaQuery || DEFAULT_JINA_QUERY,
       num: 10,
     };
-  }
+  } else delete cfg.jina;
+
   if (enrich && (phEnabled || jinaEnabled)) cfg.enrich = true;
+  else delete cfg.enrich;
+
   return Object.keys(cfg).length ? cfg : null;
 }
 
@@ -171,7 +194,16 @@ function fillSourceFields(form, project) {
   if (jq) jq.value = (cfg.jina && cfg.jina.query) || DEFAULT_JINA_QUERY;
   const enrich = form.elements.namedItem("enrich");
   if (enrich) enrich.checked = cfg.enrich === true;
+
+  const advanced = form.elements.namedItem("source_config_json");
+  if (advanced) {
+    const { producthunt: _ph, jina: _jina, enrich: _en, ...rest } = cfg;
+    advanced.value = Object.keys(rest).length
+      ? JSON.stringify(rest, null, 2)
+      : "";
+  }
 }
+
 
 function openNewProjectDialog() {
   const backdrop = $("new-project-backdrop");
@@ -604,6 +636,36 @@ $("btn-find-leads").addEventListener("click", async () => {
     toast(
       `Fetched ${summary.fetched}, kept ${summary.kept}, rejected ${summary.rejected}${dups}${skip}${errs}`,
       summary.errors?.length ? "error" : "success"
+    );
+  } catch (err) {
+    toast(err.message || String(err), "error");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$("btn-enrich-companies").addEventListener("click", async () => {
+  if (!currentProjectId) {
+    toast("Select a project first", "error");
+    return;
+  }
+  const btn = $("btn-enrich-companies");
+  btn.disabled = true;
+  try {
+    toast("Enriching companies…");
+    const summary = await api(
+      `/api/projects/${currentProjectId}/enrich-companies`,
+      { method: "POST", body: "{}" }
+    );
+    await loadStats();
+    await loadLeads();
+    const errs =
+      Array.isArray(summary.errors) && summary.errors.length
+        ? ` — errors: ${summary.errors.slice(0, 2).join("; ")}`
+        : "";
+    toast(
+      `Enriched ${summary.companiesEnriched}/${summary.companiesQueued}, pages ${summary.pagesFetched}, emails ${summary.emailsFound}, failed ${summary.failed}${errs}`,
+      summary.failed ? "error" : "success"
     );
   } catch (err) {
     toast(err.message || String(err), "error");

@@ -20,6 +20,7 @@ export interface CreateAppOptions {
   sessionSecret?: string;
   mxResolver?: import("../validation/email-check.js").MxResolver;
   ingestFetch?: ApiOptions["ingestFetch"];
+  enrichFetch?: ApiOptions["enrichFetch"];
   ingestEnv?: ApiOptions["ingestEnv"];
   createConfiguredSourcesFn?: ApiOptions["createConfiguredSourcesFn"];
   apifyClient?: ApiOptions["apifyClient"];
@@ -47,6 +48,7 @@ export function createApp(options: CreateAppOptions): Express {
     sessionSecret = process.env.SESSION_SECRET ?? "leadradar-dev-secret",
     mxResolver,
     ingestFetch,
+    enrichFetch,
     ingestEnv,
     createConfiguredSourcesFn,
     apifyClient,
@@ -80,6 +82,7 @@ export function createApp(options: CreateAppOptions): Express {
       scorer,
       mxResolver,
       ingestFetch,
+      enrichFetch,
       ingestEnv,
       createConfiguredSourcesFn,
       apifyClient,

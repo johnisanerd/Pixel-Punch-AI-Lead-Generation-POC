@@ -336,6 +336,85 @@ describe("dashboard API", () => {
     expect(ingested.body.error).toMatch(/APIFY_TOKEN/);
   });
 
+  it("POST enrich-companies returns summary and stays project-scoped", async () => {
+    const fetchMock = async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes("robots.txt")) {
+        return new Response("User-agent: *\nAllow: /\n", { status: 200 });
+      }
+      return new Response(
+        `<html><head><title>Scoped Co</title><meta name="description" content="desc" /></head>
+         <body><a href="mailto:hi@scoped.example">x</a></body></html>`,
+        { status: 200, headers: { "Content-Type": "text/html" } }
+      );
+    };
+
+    const agent = request(
+      createApp({
+        db,
+        scorer: new MockScorer(),
+        allowlist: ["dev@local"],
+        enrichFetch: fetchMock,
+      })
+    );
+
+    const p1 = await agent.post("/api/projects").send({ name: "P1" });
+    const p2 = await agent.post("/api/projects").send({ name: "P2" });
+    expect(p1.status).toBe(201);
+
+    insertLeads(db, p1.body.id, [
+      {
+        company: "Scoped Co",
+        website: "https://scoped.example",
+        canonicalDomain: "scoped.example",
+        email: null,
+        votes: null,
+        source: "csv",
+        sources: ["csv"],
+      },
+    ]);
+    insertLeads(db, p2.body.id, [
+      {
+        company: "Other Co",
+        website: "https://other.example",
+        canonicalDomain: "other.example",
+        email: null,
+        votes: null,
+        source: "csv",
+        sources: ["csv"],
+      },
+    ]);
+
+    const enriched = await agent.post(
+      `/api/projects/${p1.body.id}/enrich-companies`
+    );
+    expect(enriched.status).toBe(201);
+    expect(enriched.body.runId).toBeGreaterThan(0);
+    expect(enriched.body.companiesEnriched).toBe(1);
+    expect(enriched.body.emailsFound).toBeGreaterThanOrEqual(1);
+
+    const missing = await agent.post(`/api/projects/99999/enrich-companies`);
+    expect(missing.status).toBe(404);
+
+    const empty = await agent.post(
+      `/api/projects/${p2.body.id}/enrich-companies`
+    );
+    // p2 has a website — should enrich too unless we clear. Use a third empty project.
+    const p3 = await agent.post("/api/projects").send({ name: "P3" });
+    const noSites = await agent.post(
+      `/api/projects/${p3.body.id}/enrich-companies`
+    );
+    expect(noSites.status).toBe(400);
+    expect(noSites.body.error).toMatch(/no eligible/i);
+
+    // Ensure p1 enrichment did not create profile for p2 domain via wrong scope
+    const { getCompanyProfile } = await import(
+      "../../src/enrichment/enrichment.repo.js"
+    );
+    expect(getCompanyProfile(db, p1.body.id, "scoped.example")).toBeTruthy();
+    expect(getCompanyProfile(db, p1.body.id, "other.example")).toBeUndefined();
+  });
+
   it("isAllowlisted rejects non-listed email", () => {
     expect(isAllowlisted("outsider@evil.com", ["dev@local", "team@x.com"])).toBe(
       false
